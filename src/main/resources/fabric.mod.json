@@ -1,44 +1,32 @@
 {
 	"schemaVersion": 1,
-	"id": "nocom",
+	"id": "example-mod",
 	"version": "${version}",
-	"name": "Nocom",
-	"description": "This is an example description! Tell everyone what your mod is about!",
-	"authors": [
-		"froze"
-	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
+	"name": "Example Mod",
+	"description": "",
+	"authors": [],
+	"contact": {},
 	"license": "MIT",
-	"icon": "assets/nocom/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.nocom.Nocom"
+			"com.example.ExampleMod"
 		],
 		"client": [
-			"com.nocom.NocomModClient"
-		],
-		"fabric-datagen": [
-			"com.nocom.NocomModDataGenerator"
+			"com.example.ExampleModClient"
 		]
 	},
 	"mixins": [
-		"nocom.mixins.json",
+		"example-mod.mixins.json",
 		{
-			"config": "modid.client.mixins.json",
+			"config": "example-mod.client.mixins.json",
 			"environment": "client"
 		}
 	],
 	"depends": {
-		"fabricloader": ">=0.15.11",
-		"minecraft": "~1.21",
+		"fabricloader": ">=0.17.2",
+		"minecraft": "~1.21.10",
 		"java": ">=21",
 		"fabric-api": "*"
-	},
-	"suggests": {
-		"another-mod": "*"
 	}
 }

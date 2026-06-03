@@ -1,5 +1,5 @@
 plugins {
-	id 'fabric-loom' version '1.7-SNAPSHOT'
+	id 'fabric-loom' version '1.11.8'
 	id 'maven-publish'
 }
 
@@ -18,7 +18,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"modid" {
+		"example-mod" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -34,10 +34,6 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-	implementation 'com.google.code.gson:gson:2.8.9'
-
-	modImplementation 'org.java-websocket:Java-WebSocket:1.5.7'
-	include 'org.java-websocket:Java-WebSocket:1.5.7'
 }
 
 processResources {
