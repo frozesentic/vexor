@@ -1,19 +1,20 @@
 {
 	"schemaVersion": 1,
-	"id": "example-mod",
+	"id": "vexor",
 	"version": "${version}",
-	"name": "Example Mod",
-	"description": "",
+	"name": "Vexor",
+	"description": "Player position tracking, heatmap generation, and live minimap. Inspired by the nocom exploit.",
 	"authors": [],
 	"contact": {},
 	"license": "MIT",
+	"icon": "assets/nocom/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.example.ExampleMod"
+			"com.example.VexorMod"
 		],
 		"client": [
-			"com.example.ExampleModClient"
+			"com.example.VexorModClient"
 		]
 	},
 	"mixins": [
