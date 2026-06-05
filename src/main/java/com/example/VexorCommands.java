@@ -3,6 +3,10 @@ package com.example;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.command.permission.Permission;
+import net.minecraft.command.permission.PermissionCheck;
+import net.minecraft.command.permission.PermissionLevel;
+import net.minecraft.command.permission.PermissionSourcePredicate;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -11,19 +15,21 @@ import net.minecraft.util.Formatting;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 public class VexorCommands {
 
-    // Op level 4 = server owner only
-    private static final int REQUIRED_PERMISSION = 4;
+    // Server owner only (op level 4 equivalent in the new 1.21.11 permission system)
+    private static final Predicate<ServerCommandSource> OWNER_ONLY =
+            new PermissionSourcePredicate<>(new PermissionCheck.Require(new Permission.Level(PermissionLevel.OWNERS)));
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
             dispatcher.register(literal("vexor")
-                .requires(src -> src.hasPermissionLevel(REQUIRED_PERMISSION))
+                .requires(OWNER_ONLY)
                 .then(literal("help")
                     .executes(ctx -> showHelp(ctx.getSource())))
                 .then(literal("heatmap")

@@ -1,5 +1,5 @@
 plugins {
-	id 'fabric-loom' version '1.11.8'
+	id 'fabric-loom' version '1.16.3'
 	id 'maven-publish'
 }
 
@@ -18,7 +18,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"example-mod" {
+		"vexor" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
