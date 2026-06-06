@@ -1,6 +1,6 @@
 # Vexor
 
-**Vexor** is a Fabric server-side mod for Minecraft 1.21.x that silently tracks all player positions and generates nocom-style thermal heatmaps showing exactly where players have been.
+**Vexor** is a Fabric server-side mod for Minecraft 1.21.11 that silently tracks all player positions and generates nocom-style thermal heatmaps showing exactly where players have been.
 
 Inspired by the [nocom exploit on 2b2t](https://www.youtube.com/watch?v=elqAh3GWRpA) — but implemented as a legitimate server mod with no client required.
 
@@ -112,9 +112,9 @@ Requires Java 21 and Gradle (wrapper included).
 
 | Dependency | Version |
 |---|---|
-| Minecraft | 1.21.10 |
-| Fabric Loader | ≥ 0.17.2 |
-| Fabric API | 0.138.3+1.21.10 |
+| Minecraft | 1.21.11 |
+| Fabric Loader | ≥ 0.19.3 |
+| Fabric API | 0.141.3+1.21.11 |
 | Java | 21 |
 
 ---
