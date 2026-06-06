@@ -17,15 +17,10 @@ public class HeatmapGenerator {
 
     private static final int IMAGE_SIZE = 2048;
 
-    /**
-     * Auto-bounds: fits the image to all tracked data in the dimension.
-     * This is the primary generation mode — no center or radius needed.
-     */
     public static File generateAuto(Map<Long, Integer> heatData, String dimension,
                                     File outputDir) throws IOException {
         if (heatData.isEmpty()) return null;
 
-        // Find data extent
         int minCX = Integer.MAX_VALUE, maxCX = Integer.MIN_VALUE;
         int minCZ = Integer.MAX_VALUE, maxCZ = Integer.MIN_VALUE;
         for (long key : heatData.keySet()) {
@@ -37,7 +32,6 @@ public class HeatmapGenerator {
             if (cz > maxCZ) maxCZ = cz;
         }
 
-        // Symmetric padding: 8% on each side, at least 20 cells
         int padX = Math.max(20, (maxCX - minCX) / 12);
         int padZ = Math.max(20, (maxCZ - minCZ) / 12);
         minCX -= padX; maxCX += padX;
@@ -46,9 +40,6 @@ public class HeatmapGenerator {
         return render(heatData, dimension, minCX, maxCX, minCZ, maxCZ, IMAGE_SIZE, outputDir, true);
     }
 
-    /**
-     * Fixed-bounds: centered on a world coordinate with a block radius.
-     */
     public static File generateFixed(Map<Long, Integer> heatData, String dimension,
                                      int centerBlockX, int centerBlockZ, int blockRadius,
                                      File outputDir) throws IOException {
@@ -58,12 +49,10 @@ public class HeatmapGenerator {
         int centerCX = centerBlockX >> PlayerTracker.CELL_BITS;
         int centerCZ = centerBlockZ >> PlayerTracker.CELL_BITS;
 
-        int minCX = centerCX - cellRadius;
-        int maxCX = centerCX + cellRadius;
-        int minCZ = centerCZ - cellRadius;
-        int maxCZ = centerCZ + cellRadius;
-
-        return render(heatData, dimension, minCX, maxCX, minCZ, maxCZ, 1024, outputDir, false);
+        return render(heatData, dimension,
+                centerCX - cellRadius, centerCX + cellRadius,
+                centerCZ - cellRadius, centerCZ + cellRadius,
+                1024, outputDir, false);
     }
 
     private static File render(Map<Long, Integer> heatData, String dimension,
@@ -72,55 +61,54 @@ public class HeatmapGenerator {
         int gridW = maxCX - minCX + 1;
         int gridH = maxCZ - minCZ + 1;
 
-        // Scatter cells into a float pixel accumulation buffer
-        float[] pixels = new float[imageSize * imageSize];
-
-        float scaleX = (float) imageSize / gridW;
-        float scaleZ = (float) imageSize / gridH;
-
+        // Step 1: scatter visit counts into a cell-resolution float buffer.
+        // Working at cell resolution means adjacent Bresenham cells are exactly
+        // 1 unit apart here, so a blur radius of 1 connects them properly —
+        // unlike scattering into the full image where adjacent cells are
+        // (imageSize/gridW) pixels apart and a radius-1 blur can't bridge them.
+        float[] cells = new float[gridW * gridH];
         for (Map.Entry<Long, Integer> entry : heatData.entrySet()) {
             int cx = PlayerTracker.unpackX(entry.getKey());
             int cz = PlayerTracker.unpackZ(entry.getKey());
             if (cx < minCX || cx > maxCX || cz < minCZ || cz > maxCZ) continue;
-
-            int px = (int) ((cx - minCX) * scaleX);
-            int pz = (int) ((cz - minCZ) * scaleZ);
-
-            // Clamp to image bounds
-            px = Math.max(0, Math.min(imageSize - 1, px));
-            pz = Math.max(0, Math.min(imageSize - 1, pz));
-
-            // Use log of count so even rare visits are visible
-            pixels[pz * imageSize + px] += (float) Math.log1p(entry.getValue());
+            cells[(cz - minCZ) * gridW + (cx - minCX)] += (float) Math.log1p(entry.getValue());
         }
 
-        // Tight Gaussian blur — radius 1 keeps paths crisp
-        if (autoMode) {
-            pixels = gaussianBlur(pixels, imageSize, imageSize, 1);
-        } else {
-            pixels = gaussianBlur(pixels, imageSize, imageSize, 2);
-        }
+        // Step 2: Gaussian blur at cell resolution.
+        // Radius 1 at cell level = thin crisp paths; radius 2 = slightly softer.
+        cells = gaussianBlur(cells, gridW, gridH, autoMode ? 1 : 2);
 
-        // Find max for normalization
+        // Step 3: normalize to [0, 1]
         float maxVal = 0;
-        for (float v : pixels) if (v > maxVal) maxVal = v;
+        for (float v : cells) if (v > maxVal) maxVal = v;
         if (maxVal == 0) return null;
+        for (int i = 0; i < cells.length; i++) cells[i] /= maxVal;
 
-        // Render
+        // Step 4: bilinear upscale to full image size + apply thermal colormap.
+        // Bilinear interpolation smoothly connects adjacent cells so paths
+        // appear as continuous lines rather than disconnected dots.
         BufferedImage img = new BufferedImage(imageSize, imageSize, BufferedImage.TYPE_INT_ARGB);
-
-        // Pure black background
         Graphics2D bg = img.createGraphics();
         bg.setColor(Color.BLACK);
         bg.fillRect(0, 0, imageSize, imageSize);
         bg.dispose();
 
-        for (int pz = 0; pz < imageSize; pz++) {
+        for (int py = 0; py < imageSize; py++) {
+            float fz = (py + 0.5f) * gridH / imageSize;
+            int z0 = Math.max(0, Math.min(gridH - 1, (int) fz));
+            int z1 = Math.min(gridH - 1, z0 + 1);
+            float wz = fz - z0;
             for (int px = 0; px < imageSize; px++) {
-                float v = pixels[pz * imageSize + px];
-                if (v < 0.001f) continue;
-                float t = v / maxVal;
-                img.setRGB(px, pz, thermalColor(t));
+                float fx = (px + 0.5f) * gridW / imageSize;
+                int x0 = Math.max(0, Math.min(gridW - 1, (int) fx));
+                int x1 = Math.min(gridW - 1, x0 + 1);
+                float wx = fx - x0;
+                float v = cells[z0 * gridW + x0] * (1 - wx) * (1 - wz)
+                        + cells[z0 * gridW + x1] * wx       * (1 - wz)
+                        + cells[z1 * gridW + x0] * (1 - wx) * wz
+                        + cells[z1 * gridW + x1] * wx       * wz;
+                if (v < 0.003f) continue;
+                img.setRGB(px, py, thermalColor(v));
             }
         }
 
@@ -128,23 +116,22 @@ public class HeatmapGenerator {
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Axis lines through origin (0,0) if visible
-        int originCX = -(minCX);
-        int originCZ = -(minCZ);
-        if (originCX >= 0 && originCX < gridW && originCZ >= 0 && originCZ < gridH) {
-            int opx = (int) (originCX * scaleX);
-            int opz = (int) (originCZ * scaleZ);
+        // Faint origin axis lines
+        int originOffX = -minCX;
+        int originOffZ = -minCZ;
+        if (originOffX >= 0 && originOffX < gridW && originOffZ >= 0 && originOffZ < gridH) {
+            int opx = (int) (originOffX * (float) imageSize / gridW);
+            int opz = (int) (originOffZ * (float) imageSize / gridH);
             g.setColor(new Color(255, 255, 255, 35));
             g.drawLine(opx, 0, opx, imageSize);
             g.drawLine(0, opz, imageSize, opz);
         }
 
-        // Corner coordinates in block space
         int blockScale = PlayerTracker.CELL_SIZE;
         int blMinX = minCX * blockScale, blMinZ = minCZ * blockScale;
         int blMaxX = maxCX * blockScale, blMaxZ = maxCZ * blockScale;
 
-        // HUD bar
+        // HUD bars
         g.setColor(new Color(0, 0, 0, 180));
         g.fillRect(0, 0, imageSize, 28);
         g.fillRect(0, imageSize - 22, imageSize, 22);
@@ -154,8 +141,7 @@ public class HeatmapGenerator {
         g.drawString("VEXOR", 8, 19);
         g.setColor(Color.WHITE);
         String dimShort = dimension.replace("minecraft:", "").toUpperCase();
-        String header = "  |  " + dimShort + "  |  " + (autoMode ? "FULL MAP" : "FIXED VIEW");
-        g.drawString(header, 65, 19);
+        g.drawString("  |  " + dimShort + "  |  " + (autoMode ? "FULL MAP" : "FIXED VIEW"), 65, 19);
         g.setFont(new Font("Monospaced", Font.PLAIN, 12));
         g.setColor(new Color(180, 180, 180));
         g.drawString("[" + blMinX + ", " + blMinZ + "]  →  [" + blMaxX + ", " + blMaxZ + "]"
@@ -203,6 +189,7 @@ public class HeatmapGenerator {
         float[] result = new float[data.length];
         double sigma2 = 2.0 * radius * radius;
 
+        // Horizontal pass
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 float sum = 0, weight = 0;
@@ -217,6 +204,7 @@ public class HeatmapGenerator {
                 temp[y * width + x] = weight > 0 ? sum / weight : 0;
             }
         }
+        // Vertical pass
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 float sum = 0, weight = 0;
@@ -234,23 +222,11 @@ public class HeatmapGenerator {
         return result;
     }
 
-    /**
-     * Thermal / "nocom-style" colormap:
-     *   0.00 → black
-     *   0.20 → deep purple
-     *   0.40 → bright pink / magenta
-     *   0.60 → red-orange
-     *   0.80 → orange-yellow
-     *   1.00 → white
-     */
     public static int thermalColor(float t) {
         if (t <= 0) return 0xFF000000;
         t = Math.min(1, t);
 
-        // Alpha: ramp up quickly so even dim traces are visible
-        int a = Math.min(255, (int) (t * 340));
-
-        float[] stops = {0f, 0.22f, 0.42f, 0.62f, 0.80f, 1.0f};
+        float[] stops  = {0f,   0.22f, 0.42f, 0.62f, 0.80f, 1.0f};
         int[][] colors = {
             {0,   0,   0  },  // black
             {55,  0,   90 },  // deep purple
@@ -266,9 +242,9 @@ public class HeatmapGenerator {
                 int r = (int) (colors[i][0] + s * (colors[i + 1][0] - colors[i][0]));
                 int g = (int) (colors[i][1] + s * (colors[i + 1][1] - colors[i][1]));
                 int b = (int) (colors[i][2] + s * (colors[i + 1][2] - colors[i][2]));
-                return (a << 24) | (r << 16) | (g << 8) | b;
+                return 0xFF000000 | (r << 16) | (g << 8) | b;
             }
         }
-        return (a << 24) | (255 << 16) | (255 << 8) | 255;
+        return 0xFFFFFFFF;
     }
 }
