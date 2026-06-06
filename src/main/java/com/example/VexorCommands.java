@@ -3,6 +3,7 @@ package com.example;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.command.permission.Permission;
 import net.minecraft.command.permission.PermissionCheck;
 import net.minecraft.command.permission.PermissionLevel;
@@ -119,7 +120,7 @@ public class VexorCommands {
 
         new Thread(() -> {
             try {
-                File outputDir = new File(src.getServer().getRunDirectory().toFile(), "vexor/heatmaps");
+                File outputDir = FabricLoader.getInstance().getGameDir().resolve("vexor/heatmaps").toFile();
                 File file;
                 if (autoMode) {
                     file = HeatmapGenerator.generateAuto(heat, finalDim, outputDir);
@@ -273,7 +274,7 @@ public class VexorCommands {
 
     private static int exportCsv(ServerCommandSource src) {
         try {
-            File dir = new File(src.getServer().getRunDirectory().toFile(), "vexor");
+            File dir = FabricLoader.getInstance().getGameDir().resolve("vexor").toFile();
             File file = DataPersistence.exportCsv(VexorMod.tracker, dir);
             src.sendFeedback(() -> Text.literal("[Vexor] CSV: " + file.getAbsolutePath()).formatted(Formatting.GREEN), false);
         } catch (Exception e) {

@@ -1,6 +1,7 @@
 package com.example;
 
 import com.google.gson.*;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.*;
@@ -120,6 +121,6 @@ public class DataPersistence {
     }
 
     private static File getDataDir(MinecraftServer server) {
-        return new File(server.getRunDirectory().toFile(), "vexor");
+        return FabricLoader.getInstance().getGameDir().resolve("vexor").toFile();
     }
 }
