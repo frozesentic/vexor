@@ -4,6 +4,8 @@
 
 Inspired by the [nocom exploit on 2b2t](https://www.youtube.com/watch?v=elqAh3GWRpA) — but implemented as a legitimate server mod with no client required.
 
+<img width="2048" height="2048" alt="vexor_overworld_full_1780769375355" src="https://github.com/user-attachments/assets/2a18e40a-5960-448c-8c7e-e1e967225443" />
+
 ---
 
 ## Features
