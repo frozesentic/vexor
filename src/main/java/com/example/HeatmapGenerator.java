@@ -58,8 +58,14 @@ public class HeatmapGenerator {
     private static File render(Map<Long, Integer> heatData, String dimension,
                                 int minCX, int maxCX, int minCZ, int maxCZ,
                                 int imageSize, File outputDir, boolean autoMode) throws IOException {
-        int gridW = maxCX - minCX + 1;
-        int gridH = maxCZ - minCZ + 1;
+        long gridWL = (long) maxCX - minCX + 1;
+        long gridHL = (long) maxCZ - minCZ + 1;
+
+        // Subsample when the explored extent is larger than the image resolution:
+        // more cells than pixels add no detail, and avoids int overflow in index math.
+        int step = (int) Math.max(1L, Math.max(gridWL / imageSize, gridHL / imageSize));
+        int gridW = (int) ((gridWL + step - 1) / step);
+        int gridH = (int) ((gridHL + step - 1) / step);
 
         // Step 1: scatter visit counts into a cell-resolution float buffer.
         // Working at cell resolution means adjacent Bresenham cells are exactly
@@ -71,7 +77,9 @@ public class HeatmapGenerator {
             int cx = PlayerTracker.unpackX(entry.getKey());
             int cz = PlayerTracker.unpackZ(entry.getKey());
             if (cx < minCX || cx > maxCX || cz < minCZ || cz > maxCZ) continue;
-            cells[(cz - minCZ) * gridW + (cx - minCX)] += (float) Math.log1p(entry.getValue());
+            int gx = (int) (((long) cx - minCX) / step);
+            int gz = (int) (((long) cz - minCZ) / step);
+            cells[gz * gridW + gx] += (float) Math.log1p(entry.getValue());
         }
 
         // Step 2: Gaussian blur at cell resolution.
