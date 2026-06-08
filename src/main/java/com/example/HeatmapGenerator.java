@@ -6,6 +6,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
 
@@ -21,16 +22,23 @@ public class HeatmapGenerator {
                                     File outputDir) throws IOException {
         if (heatData.isEmpty()) return null;
 
-        int minCX = Integer.MAX_VALUE, maxCX = Integer.MIN_VALUE;
-        int minCZ = Integer.MAX_VALUE, maxCZ = Integer.MIN_VALUE;
+        int n = heatData.size();
+        int[] cxArr = new int[n];
+        int[] czArr = new int[n];
+        int i = 0;
         for (long key : heatData.keySet()) {
-            int cx = PlayerTracker.unpackX(key);
-            int cz = PlayerTracker.unpackZ(key);
-            if (cx < minCX) minCX = cx;
-            if (cx > maxCX) maxCX = cx;
-            if (cz < minCZ) minCZ = cz;
-            if (cz > maxCZ) maxCZ = cz;
+            cxArr[i] = PlayerTracker.unpackX(key);
+            czArr[i] = PlayerTracker.unpackZ(key);
+            i++;
         }
+        Arrays.sort(cxArr);
+        Arrays.sort(czArr);
+
+        // Clip 2% from each tail so outlier cells far from the main cluster
+        // don't inflate the bounding box. render() filters them out anyway.
+        int clip = n / 50;
+        int minCX = cxArr[clip], maxCX = cxArr[n - 1 - clip];
+        int minCZ = czArr[clip], maxCZ = czArr[n - 1 - clip];
 
         int padX = Math.max(20, (maxCX - minCX) / 12);
         int padZ = Math.max(20, (maxCZ - minCZ) / 12);
