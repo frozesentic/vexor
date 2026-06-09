@@ -45,7 +45,35 @@ public class HeatmapGenerator {
         minCX -= padX; maxCX += padX;
         minCZ -= padZ; maxCZ += padZ;
 
-        return render(heatData, dimension, minCX, maxCX, minCZ, maxCZ, IMAGE_SIZE, outputDir, true);
+        return render(heatData, dimension, minCX, maxCX, minCZ, maxCZ, IMAGE_SIZE, outputDir, true, null);
+    }
+
+    public static File generateAutoForPlayer(Map<Long, Integer> heatData, String playerName,
+                                             String dimension, File outputDir) throws IOException {
+        if (heatData.isEmpty()) return null;
+
+        int n = heatData.size();
+        int[] cxArr = new int[n];
+        int[] czArr = new int[n];
+        int i = 0;
+        for (long key : heatData.keySet()) {
+            cxArr[i] = PlayerTracker.unpackX(key);
+            czArr[i] = PlayerTracker.unpackZ(key);
+            i++;
+        }
+        Arrays.sort(cxArr);
+        Arrays.sort(czArr);
+
+        int clip = n / 50;
+        int minCX = cxArr[clip], maxCX = cxArr[n - 1 - clip];
+        int minCZ = czArr[clip], maxCZ = czArr[n - 1 - clip];
+
+        int padX = Math.max(20, (maxCX - minCX) / 12);
+        int padZ = Math.max(20, (maxCZ - minCZ) / 12);
+        minCX -= padX; maxCX += padX;
+        minCZ -= padZ; maxCZ += padZ;
+
+        return render(heatData, dimension, minCX, maxCX, minCZ, maxCZ, IMAGE_SIZE, outputDir, true, playerName);
     }
 
     public static File generateFixed(Map<Long, Integer> heatData, String dimension,
@@ -60,12 +88,28 @@ public class HeatmapGenerator {
         return render(heatData, dimension,
                 centerCX - cellRadius, centerCX + cellRadius,
                 centerCZ - cellRadius, centerCZ + cellRadius,
-                1024, outputDir, false);
+                1024, outputDir, false, null);
+    }
+
+    public static File generateFixedForPlayer(Map<Long, Integer> heatData, String playerName,
+                                              String dimension, int centerBlockX, int centerBlockZ,
+                                              int blockRadius, File outputDir) throws IOException {
+        if (heatData.isEmpty()) return null;
+
+        int cellRadius = Math.max(1, blockRadius >> PlayerTracker.CELL_BITS);
+        int centerCX = centerBlockX >> PlayerTracker.CELL_BITS;
+        int centerCZ = centerBlockZ >> PlayerTracker.CELL_BITS;
+
+        return render(heatData, dimension,
+                centerCX - cellRadius, centerCX + cellRadius,
+                centerCZ - cellRadius, centerCZ + cellRadius,
+                1024, outputDir, false, playerName);
     }
 
     private static File render(Map<Long, Integer> heatData, String dimension,
                                 int minCX, int maxCX, int minCZ, int maxCZ,
-                                int imageSize, File outputDir, boolean autoMode) throws IOException {
+                                int imageSize, File outputDir, boolean autoMode,
+                                String playerName) throws IOException {
         long gridWL = (long) maxCX - minCX + 1;
         long gridHL = (long) maxCZ - minCZ + 1;
 
@@ -157,7 +201,8 @@ public class HeatmapGenerator {
         g.drawString("VEXOR", 8, 19);
         g.setColor(Color.WHITE);
         String dimShort = dimension.replace("minecraft:", "").toUpperCase();
-        g.drawString("  |  " + dimShort + "  |  " + (autoMode ? "FULL MAP" : "FIXED VIEW"), 65, 19);
+        String playerTag = playerName != null ? "  |  " + playerName : "";
+        g.drawString("  |  " + dimShort + playerTag + "  |  " + (autoMode ? "FULL MAP" : "FIXED VIEW"), 65, 19);
         g.setFont(new Font("Monospaced", Font.PLAIN, 12));
         g.setColor(new Color(180, 180, 180));
         g.drawString("[" + blMinX + ", " + blMinZ + "]  →  [" + blMaxX + ", " + blMaxZ + "]"
@@ -193,7 +238,8 @@ public class HeatmapGenerator {
         outputDir.mkdirs();
         String dimTag = dimension.replace("minecraft:", "").replace(":", "_");
         String mode = autoMode ? "full" : "view";
-        String name = "vexor_" + dimTag + "_" + mode + "_" + System.currentTimeMillis() + ".png";
+        String playerSuffix = playerName != null ? "_" + playerName.toLowerCase() : "";
+        String name = "vexor_" + dimTag + playerSuffix + "_" + mode + "_" + System.currentTimeMillis() + ".png";
         File out = new File(outputDir, name);
         ImageIO.write(img, "PNG", out);
         return out;

@@ -14,6 +14,8 @@ public class PlayerTracker {
 
     // dimension id -> packed cell key -> visit count
     private final Map<String, Map<Long, Integer>> heatData = new ConcurrentHashMap<>();
+    // player name -> dimension id -> packed cell key -> visit count
+    private final Map<String, Map<String, Map<Long, Integer>>> playerHeatData = new ConcurrentHashMap<>();
     private final Map<String, PlayerStats> playerStats = new ConcurrentHashMap<>();
     private final Map<String, Long> joinTimes = new ConcurrentHashMap<>();
 
@@ -38,6 +40,9 @@ public class PlayerTracker {
         int cz = player.getBlockZ() >> CELL_BITS;
 
         Map<Long, Integer> dimData = heatData.computeIfAbsent(dim, k -> new ConcurrentHashMap<>());
+        Map<Long, Integer> playerDimData = playerHeatData
+                .computeIfAbsent(name, k -> new ConcurrentHashMap<>())
+                .computeIfAbsent(dim, k -> new ConcurrentHashMap<>());
 
         String prevDim = lastDim.get(name);
         int[] prev = lastCell.get(name);
@@ -48,12 +53,15 @@ public class PlayerTracker {
             if (Math.max(dx, dz) <= MAX_INTERPOLATE_CELLS) {
                 // Draw a continuous line between the two sampled positions
                 bresenhamLine(dimData, prev[0], prev[1], cx, cz);
+                bresenhamLine(playerDimData, prev[0], prev[1], cx, cz);
             } else {
                 // Teleport — just mark the landing cell
                 dimData.merge(pack(cx, cz), 1, Integer::sum);
+                playerDimData.merge(pack(cx, cz), 1, Integer::sum);
             }
         } else {
             dimData.merge(pack(cx, cz), 1, Integer::sum);
+            playerDimData.merge(pack(cx, cz), 1, Integer::sum);
         }
 
         lastCell.put(name, new int[]{cx, cz});
@@ -110,6 +118,20 @@ public class PlayerTracker {
         return Collections.unmodifiableMap(heatData);
     }
 
+    public Map<Long, Integer> getPlayerHeatData(String playerName, String dimension) {
+        Map<String, Map<Long, Integer>> dims = playerHeatData.get(playerName);
+        if (dims == null) return Collections.emptyMap();
+        return Collections.unmodifiableMap(dims.getOrDefault(dimension, Collections.emptyMap()));
+    }
+
+    public Map<String, Map<Long, Integer>> getPlayerHeatData(String playerName) {
+        return Collections.unmodifiableMap(playerHeatData.getOrDefault(playerName, Collections.emptyMap()));
+    }
+
+    public Map<String, Map<String, Map<Long, Integer>>> getAllPlayerHeatData() {
+        return Collections.unmodifiableMap(playerHeatData);
+    }
+
     public List<String> getDimensions() {
         return new ArrayList<>(heatData.keySet());
     }
@@ -138,6 +160,7 @@ public class PlayerTracker {
 
     public void clear() {
         heatData.clear();
+        playerHeatData.clear();
         playerStats.clear();
         recentPaths.clear();
         lastCell.clear();
@@ -146,16 +169,24 @@ public class PlayerTracker {
 
     public void clear(String dimension) {
         heatData.remove(dimension);
+        playerHeatData.values().forEach(dims -> dims.remove(dimension));
     }
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
-    public void loadData(Map<String, Map<Long, Integer>> heat, Map<String, PlayerStats> stats) {
+    public void loadData(Map<String, Map<Long, Integer>> heat, Map<String, PlayerStats> stats,
+                         Map<String, Map<String, Map<Long, Integer>>> playerHeat) {
         heatData.clear();
         heat.forEach((k, v) -> heatData.put(k, new ConcurrentHashMap<>(v)));
         playerStats.clear();
         playerStats.putAll(stats);
+        playerHeatData.clear();
+        playerHeat.forEach((player, dims) -> {
+            Map<String, Map<Long, Integer>> playerDims = new ConcurrentHashMap<>();
+            dims.forEach((dim, cells) -> playerDims.put(dim, new ConcurrentHashMap<>(cells)));
+            playerHeatData.put(player, playerDims);
+        });
     }
 
     public int getTotalSamples() {

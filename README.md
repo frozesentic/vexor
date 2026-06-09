@@ -14,6 +14,7 @@ Inspired by the [nocom exploit on 2b2t](https://www.youtube.com/watch?v=elqAh3GW
 - **Path interpolation** — fills in movement between samples using Bresenham line drawing, so paths appear as continuous trails rather than dots
 - **Thermal heatmap generation** — exports high-resolution PNG images with a nocom-style colormap (black → purple → magenta → red → orange → white)
 - **Auto-bounds mode** — `/vexor heatmap` with no arguments automatically fits the entire map to all tracked data, no matter how far players have travelled
+- **Per-player heatmaps** — `/vexor heatmap player <name>` generates a map showing only that player's paths, making it easy to identify who built what or who explored a distant base
 - **Owner-only access** — all commands require op level 4; invisible to normal players and lower-level ops
 - **Persistent data** — tracking data survives server restarts; auto-saves every 5 minutes
 - **Live minimap HUD** — client-side overlay showing your own heat trail, online players, compass, and zoom levels
@@ -42,6 +43,8 @@ All commands require **op level 4** (server owner).
 | `/vexor heatmap` | Generate a full-map PNG auto-fitted to all tracked data |
 | `/vexor heatmap <radius>` | Generate centered on your position with the given block radius |
 | `/vexor heatmap <x> <z> <radius>` | Generate centered on specific world coordinates |
+| `/vexor heatmap player <name>` | Full-map PNG showing only that player's paths |
+| `/vexor heatmap player <name> <x> <z> <radius>` | Fixed-view of a specific player's paths |
 | `/vexor stats` | Overall stats: tracked cells, players, sample count, dimensions |
 | `/vexor stats <player>` | Per-player stats: sessions, total playtime, most visited dimension |
 | `/vexor top [count]` | Top N most-visited locations with block coordinates |
@@ -140,9 +143,19 @@ Requires Java 21 and Gradle (wrapper included).
       "totalSamples": 3600,
       "mostVisitedDimension": "minecraft:overworld"
     }
+  },
+  "playerHeat": {
+    "PlayerName": {
+      "minecraft:overworld": {
+        "4294967296": 42,
+        ...
+      }
+    }
   }
 }
 ```
+
+`playerHeat` mirrors the structure of `heat` but scoped per player, enabling per-player heatmap generation. Data in `heat` is the aggregate across all players.
 
 CSV export (`/vexor export`) includes columns: `dimension, chunkX, chunkZ, blockX, blockZ, visits`.
 

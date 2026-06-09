@@ -48,7 +48,19 @@ public class VexorCommands {
                                 .executes(ctx -> generateHeatmap(ctx.getSource(),
                                     IntegerArgumentType.getInteger(ctx, "x"),
                                     IntegerArgumentType.getInteger(ctx, "z"),
-                                    IntegerArgumentType.getInteger(ctx, "radius")))))))
+                                    IntegerArgumentType.getInteger(ctx, "radius"))))))
+                    .then(literal("player")
+                        .then(argument("name", StringArgumentType.string())
+                            .executes(ctx -> generatePlayerHeatmap(ctx.getSource(),
+                                StringArgumentType.getString(ctx, "name"), null, null, -1))
+                            .then(argument("x", IntegerArgumentType.integer(-30_000_000, 30_000_000))
+                                .then(argument("z", IntegerArgumentType.integer(-30_000_000, 30_000_000))
+                                    .then(argument("radius", IntegerArgumentType.integer(100, 30_000_000))
+                                        .executes(ctx -> generatePlayerHeatmap(ctx.getSource(),
+                                            StringArgumentType.getString(ctx, "name"),
+                                            IntegerArgumentType.getInteger(ctx, "x"),
+                                            IntegerArgumentType.getInteger(ctx, "z"),
+                                            IntegerArgumentType.getInteger(ctx, "radius")))))))))
                 .then(literal("stats")
                     .executes(ctx -> showStats(ctx.getSource(), null))
                     .then(argument("player", StringArgumentType.string())
@@ -126,6 +138,68 @@ public class VexorCommands {
                     file = HeatmapGenerator.generateAuto(heat, finalDim, outputDir);
                 } else {
                     file = HeatmapGenerator.generateFixed(heat, finalDim, finalCx, finalCz, finalRadius, outputDir);
+                }
+                if (file != null) {
+                    String path = file.getAbsolutePath();
+                    src.getServer().execute(() ->
+                        src.sendFeedback(() -> Text.literal("[Vexor] Saved: " + path).formatted(Formatting.GREEN), true)
+                    );
+                } else {
+                    src.getServer().execute(() ->
+                        src.sendFeedback(() -> Text.literal("[Vexor] No data in range").formatted(Formatting.RED), false)
+                    );
+                }
+            } catch (Exception e) {
+                VexorMod.LOGGER.error("Heatmap generation failed", e);
+                src.getServer().execute(() ->
+                    src.sendFeedback(() -> Text.literal("[Vexor] Error: " + e.getMessage()).formatted(Formatting.RED), false)
+                );
+            }
+        }, "vexor-heatmap").start();
+
+        return 1;
+    }
+
+    private static int generatePlayerHeatmap(ServerCommandSource src, String playerName,
+                                              Integer x, Integer z, int radius) {
+        PlayerTracker tracker = VexorMod.tracker;
+
+        Map<String, Map<Long, Integer>> allDims = tracker.getPlayerHeatData(playerName);
+        if (allDims.isEmpty()) {
+            src.sendFeedback(() -> Text.literal("[Vexor] No data for player: " + playerName).formatted(Formatting.RED), false);
+            return 0;
+        }
+
+        // Pick dimension: executor's current dim, falling back to the player's most-populated one
+        String execDim = (src.getEntity() instanceof ServerPlayerEntity player)
+                ? PlayerTracker.getDimensionId(player) : "minecraft:overworld";
+        String finalDim = allDims.containsKey(execDim) ? execDim
+                : allDims.entrySet().stream()
+                        .max(Map.Entry.comparingByValue(java.util.Comparator.comparingInt(Map::size)))
+                        .map(Map.Entry::getKey).orElse(execDim);
+
+        Map<Long, Integer> heat = tracker.getPlayerHeatData(playerName, finalDim);
+        if (heat.isEmpty()) {
+            src.sendFeedback(() -> Text.literal("[Vexor] No data for " + playerName + " in " + finalDim).formatted(Formatting.RED), false);
+            return 0;
+        }
+
+        boolean autoMode = (radius == -1 && x == null);
+        String modeDesc = autoMode ? "full map (auto-bounds)" : "radius " + radius + "b";
+        src.sendFeedback(() -> Text.literal("[Vexor] Generating heatmap for " + playerName + " (" + modeDesc + ")…").formatted(Formatting.YELLOW), false);
+
+        final int finalX = x != null ? x : 0;
+        final int finalZ = z != null ? z : 0;
+        final int finalRadius = radius;
+
+        new Thread(() -> {
+            try {
+                File outputDir = FabricLoader.getInstance().getGameDir().resolve("vexor/heatmaps").toFile();
+                File file;
+                if (autoMode) {
+                    file = HeatmapGenerator.generateAutoForPlayer(heat, playerName, finalDim, outputDir);
+                } else {
+                    file = HeatmapGenerator.generateFixedForPlayer(heat, playerName, finalDim, finalX, finalZ, finalRadius, outputDir);
                 }
                 if (file != null) {
                     String path = file.getAbsolutePath();
@@ -289,6 +363,8 @@ public class VexorCommands {
             {"/vexor heatmap", "Full-map PNG auto-fitted to all tracked data"},
             {"/vexor heatmap <radius>", "PNG centered at your position, given radius (blocks)"},
             {"/vexor heatmap <x> <z> <radius>", "PNG centered on specific coordinates"},
+            {"/vexor heatmap player <name>", "Full-map PNG showing only that player's paths"},
+            {"/vexor heatmap player <name> <x> <z> <radius>", "Fixed view of a player's paths"},
             {"/vexor stats", "Overall: players, cells, samples, dimensions"},
             {"/vexor stats <player>", "Per-player stats"},
             {"/vexor top [count]", "Top N most-visited locations"},

@@ -45,6 +45,21 @@ public class DataPersistence {
         }
         root.add("players", playersJson);
 
+        // Per-player heat data: player -> dimension -> cell key -> count
+        JsonObject playerHeatJson = new JsonObject();
+        for (Map.Entry<String, Map<String, Map<Long, Integer>>> playerEntry : tracker.getAllPlayerHeatData().entrySet()) {
+            JsonObject dimsJson2 = new JsonObject();
+            for (Map.Entry<String, Map<Long, Integer>> dimEntry2 : playerEntry.getValue().entrySet()) {
+                JsonObject cellsJson = new JsonObject();
+                for (Map.Entry<Long, Integer> cell : dimEntry2.getValue().entrySet()) {
+                    cellsJson.addProperty(String.valueOf(cell.getKey()), cell.getValue());
+                }
+                dimsJson2.add(dimEntry2.getKey(), cellsJson);
+            }
+            playerHeatJson.add(playerEntry.getKey(), dimsJson2);
+        }
+        root.add("playerHeat", playerHeatJson);
+
         File file = new File(dir, "vexor_data.json");
         try (FileWriter w = new FileWriter(file)) {
             GSON.toJson(root, w);
@@ -92,7 +107,22 @@ public class DataPersistence {
                 }
             }
 
-            tracker.loadData(heat, stats);
+            Map<String, Map<String, Map<Long, Integer>>> playerHeat = new HashMap<>();
+            if (root.has("playerHeat")) {
+                for (Map.Entry<String, JsonElement> playerEntry : root.getAsJsonObject("playerHeat").entrySet()) {
+                    Map<String, Map<Long, Integer>> dims = new HashMap<>();
+                    for (Map.Entry<String, JsonElement> dimEntry2 : playerEntry.getValue().getAsJsonObject().entrySet()) {
+                        Map<Long, Integer> cells = new HashMap<>();
+                        for (Map.Entry<String, JsonElement> cell : dimEntry2.getValue().getAsJsonObject().entrySet()) {
+                            cells.put(Long.parseLong(cell.getKey()), cell.getValue().getAsInt());
+                        }
+                        dims.put(dimEntry2.getKey(), cells);
+                    }
+                    playerHeat.put(playerEntry.getKey(), dims);
+                }
+            }
+
+            tracker.loadData(heat, stats, playerHeat);
             VexorMod.LOGGER.info("[Vexor] Loaded {} dimensions, {} players from disk",
                     heat.size(), stats.size());
 
